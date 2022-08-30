@@ -5,17 +5,18 @@ import numpy as np
 import torch.utils.data as data
 import pdb
 
+
 def get_train_loader(train_data, args):
     if args.class_balance:
         sampler = data.sampler.WeightedRandomSampler(
-                weights=train_data.weights,
-                num_samples=len(train_data),
-                replacement=True)
+            weights=train_data.weights,
+            num_samples=len(train_data),
+            replacement=True)
         train_loader = data.DataLoader(
-                train_data,
-                num_workers=args.num_workers,
-                sampler=sampler,
-                batch_size=args.batch_size)
+            train_data,
+            num_workers=args.num_workers,
+            sampler=sampler,
+            batch_size=args.batch_size)
     else:
         train_loader = data.DataLoader(
             train_data,
@@ -26,6 +27,7 @@ def get_train_loader(train_data, args):
 
     return train_loader
 
+
 def get_rationales(mask, text):
     if mask is None:
         return text
@@ -33,11 +35,10 @@ def get_rationales(mask, text):
     for i, t in enumerate(text):
         sample_mask = list(mask.data[i])
         original_words = t.split()
-        words = [ w if m  > .5 else "_" for w,m in zip(original_words, sample_mask) ]
+        words = [w if m > .5 else "_" for w, m in zip(original_words, sample_mask)]
         masked_sample = " ".join(words)
         masked_text.append(masked_sample)
     return masked_text
-
 
 
 def get_dev_loader(dev_data, args):
@@ -49,6 +50,7 @@ def get_dev_loader(dev_data, args):
         drop_last=False)
     return dev_loader
 
+
 def get_optimizer(models, args):
     '''
         -models: List of models (such as Generator, classif, memory, etc)
@@ -59,13 +61,12 @@ def get_optimizer(models, args):
     params = []
     for model in models:
         params.extend([param for param in model.parameters() if param.requires_grad])
-    return torch.optim.Adam(params, lr=args.lr,  weight_decay=args.weight_decay)
+    return torch.optim.Adam(params, lr=args.lr, weight_decay=args.weight_decay)
 
 
 def get_x_indx(batch, args, eval_model):
     x_indx = autograd.Variable(batch['x'], volatile=eval_model)
     return x_indx
-
 
 
 def get_hard_mask(z, return_ind=False):
@@ -84,6 +85,7 @@ def get_hard_mask(z, return_ind=False):
     del z
     return masked
 
+
 def get_gen_path(model_path):
     '''
         -model_path: path of encoder model
@@ -92,8 +94,9 @@ def get_gen_path(model_path):
     '''
     return '{}.gen'.format(model_path)
 
+
 def one_hot(label, num_class):
-    vec = torch.zeros( (1, num_class) )
+    vec = torch.zeros((1, num_class))
     vec[0][label] = 1
     return vec
 
@@ -106,5 +109,5 @@ def gumbel_softmax(input, temperature, cuda):
     if cuda:
         noise = noise.cuda()
     x = (input + noise) / temperature
-    x = F.softmax(x.view(-1,  x.size()[-1]), dim=-1)
+    x = F.softmax(x.view(-1, x.size()[-1]), dim=-1)
     return x.view_as(input)

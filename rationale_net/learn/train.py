@@ -39,9 +39,6 @@ def train_model(train_data, dev_data, model, gen, args):
     train_loader = learn.get_train_loader(train_data, args)
     dev_loader = learn.get_dev_loader(dev_data, args)
 
-
-
-
     for epoch in range(1, args.epochs + 1):
 
         print("-------------\nEpoch {}:\n".format(epoch))
@@ -62,7 +59,6 @@ def train_model(train_data, dev_data, model, gen, args):
 
             # Log  performance
             print(log_statement)
-
 
         # Save model if beats best dev
         best_func = min if args.tuning_metric == 'loss' else max
@@ -93,7 +89,7 @@ def train_model(train_data, dev_data, model, gen, args):
 
             if args.cuda:
                 model = model.cuda()
-                gen   = gen.cuda()
+                gen = gen.cuda()
             args.lr *= .5
             optimizer = learn.get_optimizer([model, gen], args)
 
@@ -147,6 +143,7 @@ def test_model(test_data, model, gen, args):
 
     return test_stats
 
+
 def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
     '''
     Train model for one pass of train data, and return loss, acccuracy
@@ -179,8 +176,8 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
         batch = data_iter.next()
         if train_model:
             step += 1
-            if  step % 100 == 0 or args.debug_mode:
-                args.gumbel_temprature = max( np.exp((step+1) *-1* args.gumbel_decay), .05)
+            if step % 100 == 0 or args.debug_mode:
+                args.gumbel_temprature = max(np.exp((step + 1) * -1 * args.gumbel_decay), .05)
 
         x_indx = batch['x']
         text = batch['text']
@@ -217,11 +214,11 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
             optimizer.step()
 
         if args.get_rationales:
-            k_selection_losses.append( generic.tensor_to_numpy(selection_cost))
-            k_continuity_losses.append( generic.tensor_to_numpy(continuity_cost))
+            k_selection_losses.append(generic.tensor_to_numpy(selection_cost))
+            k_continuity_losses.append(generic.tensor_to_numpy(continuity_cost))
 
         obj_losses.append(generic.tensor_to_numpy(obj_loss))
-        losses.append( generic.tensor_to_numpy(loss) )
+        losses.append(generic.tensor_to_numpy(loss))
         batch_softmax = F.softmax(logit, dim=-1).cpu()
         preds.extend(torch.max(batch_softmax, 1)[1].view(y.size()).data.numpy())
 
@@ -233,12 +230,10 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
         else:
             golds.extend(batch['y'].numpy())
 
-
-
     epoch_metrics = metrics.get_metrics(preds, golds, args)
 
     epoch_stat = {
-        'loss' : np.mean(losses),
+        'loss': np.mean(losses),
         'obj_loss': np.mean(obj_losses)
     }
 
@@ -252,7 +247,7 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
     return epoch_stat, step, losses, preds, golds, rationales
 
 
-def get_loss(logit,y, args):
+def get_loss(logit, y, args):
     if args.objective == 'cross_entropy':
         if args.use_as_tagger:
             loss = F.cross_entropy(logit, y, reduce=False)
