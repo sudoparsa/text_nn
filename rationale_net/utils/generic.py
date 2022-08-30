@@ -3,7 +3,7 @@ import pdb
 import argparse
 
 def tensor_to_numpy(tensor):
-    return tensor.data[0]
+    return tensor.cpu().data
 
 class Namespace:
     def __init__(self, **kwargs):
