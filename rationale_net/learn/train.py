@@ -46,14 +46,25 @@ def train_model(train_data, dev_data, model, gen, args):
             train_model = mode == 'Train'
             print('{}'.format(mode))
             key_prefix = mode.lower()
-            epoch_details, step, _, _, _, _ = run_epoch(
-                data_loader=loader,
-                train_model=train_model,
-                model=model,
-                gen=gen,
-                optimizer=optimizer,
-                step=step,
-                args=args)
+            if train_model:
+                epoch_details, step, _, _, _, _ = run_epoch(
+                    data_loader=loader,
+                    train_model=train_model,
+                    model=model,
+                    gen=gen,
+                    optimizer=optimizer,
+                    step=step,
+                    args=args)
+            else:
+                with torch.no_grad():
+                    epoch_details, step, _, _, _, _ = run_epoch(
+                        data_loader=loader,
+                        train_model=train_model,
+                        model=model,
+                        gen=gen,
+                        optimizer=optimizer,
+                        step=step,
+                        args=args)
 
             epoch_stats, log_statement = metrics.collate_epoch_stat(epoch_stats, epoch_details, key_prefix, args)
 
@@ -124,14 +135,15 @@ def test_model(test_data, model, gen, args):
     train_model = False
     key_prefix = mode.lower()
     print("-------------\nTest")
-    epoch_details, _, losses, preds, golds, rationales = run_epoch(
-        data_loader=test_loader,
-        train_model=train_model,
-        model=model,
-        gen=gen,
-        optimizer=None,
-        step=None,
-        args=args)
+    with torch.no_grad():
+        epoch_details, _, losses, preds, golds, rationales = run_epoch(
+            data_loader=test_loader,
+            train_model=train_model,
+            model=model,
+            gen=gen,
+            optimizer=None,
+            step=None,
+            args=args)
 
     test_stats, log_statement = metrics.collate_epoch_stat(test_stats, epoch_details, 'test', args)
     test_stats['losses'] = losses
@@ -148,7 +160,6 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
     '''
     Train model for one pass of train data, and return loss, acccuracy
     '''
-    eval_model = not train_model
     data_iter = data_loader.__iter__()
 
     losses = []
@@ -157,7 +168,6 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
     k_continuity_losses = []
     preds = []
     golds = []
-    losses = []
     texts = []
     rationales = []
 
@@ -179,38 +189,37 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
             if step % 100 == 0 or args.debug_mode:
                 args.gumbel_temprature = max(np.exp((step + 1) * -1 * args.gumbel_decay), .05)
 
-
         x_indx = batch['x']
         text = batch['text']
         y = batch['y']
-        with torch.no_grad():
-            if args.cuda:
-                x_indx, y = x_indx.cuda(), y.cuda()
-
-            if train_model:
-                optimizer.zero_grad()
-
-            if args.get_rationales:
-                mask, z = gen(x_indx)
-            else:
-                mask = None
-
-            logit, _ = model(x_indx, mask=mask)
-
-            if args.use_as_tagger:
-                logit = logit.view(-1, 2)
-                y = y.view(-1)
-
-            loss = get_loss(logit, y, args)
-            obj_loss = loss
-
-            if args.get_rationales:
-                selection_cost, continuity_cost = gen.loss(mask, x_indx)
-
-                loss += args.selection_lambda * selection_cost
-                loss += args.continuity_lambda * continuity_cost
+        if args.cuda:
+            x_indx, y = x_indx.cuda(), y.cuda()
 
         if train_model:
+            optimizer.zero_grad()
+
+        if args.get_rationales:
+            mask, z = gen(x_indx)
+        else:
+            mask = None
+
+        logit, _ = model(x_indx, mask=mask)
+
+        if args.use_as_tagger:
+            logit = logit.view(-1, 2)
+            y = y.view(-1)
+
+        loss = get_loss(logit, y, args)
+        obj_loss = loss
+
+        if args.get_rationales:
+            selection_cost, continuity_cost = gen.loss(mask, x_indx)
+
+            loss += args.selection_lambda * selection_cost
+            loss += args.continuity_lambda * continuity_cost
+
+        if train_model:
+            # optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
