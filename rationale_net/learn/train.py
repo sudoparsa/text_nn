@@ -179,35 +179,36 @@ def run_epoch(data_loader, train_model, model, gen, optimizer, step, args):
             if step % 100 == 0 or args.debug_mode:
                 args.gumbel_temprature = max(np.exp((step + 1) * -1 * args.gumbel_decay), .05)
 
+
         x_indx = batch['x']
         text = batch['text']
         y = batch['y']
+        with torch.no_grad():
+            if args.cuda:
+                x_indx, y = x_indx.cuda(), y.cuda()
 
-        if args.cuda:
-            x_indx, y = x_indx.cuda(), y.cuda()
+            if train_model:
+                optimizer.zero_grad()
 
-        if train_model:
-            optimizer.zero_grad()
+            if args.get_rationales:
+                mask, z = gen(x_indx)
+            else:
+                mask = None
 
-        if args.get_rationales:
-            mask, z = gen(x_indx)
-        else:
-            mask = None
+            logit, _ = model(x_indx, mask=mask)
 
-        logit, _ = model(x_indx, mask=mask)
+            if args.use_as_tagger:
+                logit = logit.view(-1, 2)
+                y = y.view(-1)
 
-        if args.use_as_tagger:
-            logit = logit.view(-1, 2)
-            y = y.view(-1)
+            loss = get_loss(logit, y, args)
+            obj_loss = loss
 
-        loss = get_loss(logit, y, args)
-        obj_loss = loss
+            if args.get_rationales:
+                selection_cost, continuity_cost = gen.loss(mask, x_indx)
 
-        if args.get_rationales:
-            selection_cost, continuity_cost = gen.loss(mask, x_indx)
-
-            loss += args.selection_lambda * selection_cost
-            loss += args.continuity_lambda * continuity_cost
+                loss += args.selection_lambda * selection_cost
+                loss += args.continuity_lambda * continuity_cost
 
         if train_model:
             loss.backward()
